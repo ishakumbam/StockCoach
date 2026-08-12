@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { AuthMenu } from "@/components/AuthMenu";
+import { Logo } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
 import "./globals.css";
 
@@ -20,17 +22,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-40 border-b border-line/70 bg-background/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
             <Link href="/" className="group flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-soft text-sm font-bold text-white shadow-lg shadow-accent/25">
-                S
+              <span className="drop-shadow-[0_4px_12px_rgba(99,102,241,0.45)] transition group-hover:scale-105">
+                <Logo size={34} />
               </span>
               <span className="text-lg font-semibold tracking-tight">
                 StockCoach
-                <span className="ml-2 hidden rounded-full border border-line px-2 py-0.5 text-[10px] font-normal uppercase tracking-wider text-muted sm:inline">
+                <span className="ml-2 hidden rounded-full border border-line px-2 py-0.5 text-[10px] font-normal uppercase tracking-wider text-muted md:inline">
                   Educational
                 </span>
               </span>
             </Link>
-            <NavLinks />
+            <div className="flex items-center gap-3">
+              <NavLinks />
+              <AuthMenu />
+            </div>
           </div>
         </header>
 

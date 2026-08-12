@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImportCsv } from "@/components/ImportCsv";
+import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
 import { Sparkline } from "@/components/Sparkline";
 import { Term } from "@/components/Term";
 import { changeColor, money, moneyCompact, pct, num } from "@/lib/format";
+import type { DailyPicks } from "@/lib/picks";
 import type { Position, Quote } from "@/lib/types";
 import { usePortfolio } from "@/lib/usePortfolio";
 
@@ -20,7 +22,8 @@ const STARTER_WATCHLIST: Omit<Position, "addedAt">[] = [
 const ALLOC_COLORS = ["#6366f1", "#34d399", "#f59e0b", "#38bdf8", "#f472b6", "#a78bfa", "#fb923c", "#4ade80"];
 
 export default function Dashboard() {
-  const { positions, hydrated, addPosition, removePosition, importPositions } = usePortfolio();
+  const { positions, hydrated, signedIn, addPosition, removePosition, importPositions } =
+    usePortfolio();
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
   const [loadingQuotes, setLoadingQuotes] = useState(false);
@@ -110,8 +113,8 @@ export default function Dashboard() {
   if (positions.length === 0) {
     return (
       <section className="mx-auto max-w-2xl rounded-2xl border border-line bg-surface p-8 text-center fade-up sm:p-12">
-        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-soft text-2xl font-bold text-white shadow-xl shadow-accent/25">
-          S
+        <span className="mx-auto mb-5 inline-block drop-shadow-[0_8px_24px_rgba(99,102,241,0.45)]">
+          <Logo size={56} />
         </span>
         <h1 className="text-3xl font-semibold tracking-tight">Welcome to StockCoach</h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-muted">
@@ -163,6 +166,24 @@ export default function Dashboard() {
           your portfolio is safe and nothing is lost.
         </div>
       )}
+
+      {!signedIn && positions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 text-sm">
+          <span className="text-muted">
+            💾 Your portfolio currently lives only in this browser.{" "}
+            <span className="text-foreground">Create a free account</span> to keep it safe and
+            synced across devices.
+          </span>
+          <Link
+            href="/login"
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-accent-soft"
+          >
+            Sign up →
+          </Link>
+        </div>
+      )}
+
+      <PicksStrip />
 
       <section className="grid gap-4 sm:grid-cols-3 fade-up">
         <StatCard
@@ -264,6 +285,83 @@ export default function Dashboard() {
         </div>
       </section>
     </div>
+  );
+}
+
+function PicksStrip() {
+  const [picks, setPicks] = useState<DailyPicks | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/picks");
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as DailyPicks;
+        if (!cancelled) setPicks(data);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (failed) return null;
+
+  const topBuys = picks?.byStyle.long.buys.slice(0, 3) ?? [];
+
+  return (
+    <section className="rounded-2xl border border-accent/30 bg-accent/[0.07] p-4 fade-up">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          ⚡ Today&apos;s strongest signals
+          {picks && (
+            <span className="hidden text-xs font-normal text-muted sm:inline">
+              from a scan of {picks.scanned} popular stocks
+            </span>
+          )}
+        </div>
+        <Link
+          href="/picks"
+          className="rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-accent-soft"
+        >
+          See all picks →
+        </Link>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!picks ? (
+          <span className="flex items-center gap-2 text-xs text-muted">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-line border-t-accent" />
+            Scanning the market…
+          </span>
+        ) : topBuys.length === 0 ? (
+          <span className="text-xs text-muted">
+            No confident buy signals in today&apos;s scan — choppy day. &quot;No trade&quot; is a
+            valid answer.
+          </span>
+        ) : (
+          topBuys.map((p) => (
+            <Link
+              key={p.symbol}
+              href={`/stock/${p.symbol}`}
+              className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs transition hover:border-emerald-400"
+            >
+              <span className="font-semibold text-emerald-300">{p.symbol}</span>
+              <span className="tnum text-muted">{money(p.price)}</span>
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                BUY lean
+              </span>
+            </Link>
+          ))
+        )}
+      </div>
+      <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
+        Educational signals from price patterns (long-term style) — not financial advice.
+      </p>
+    </section>
   );
 }
 
