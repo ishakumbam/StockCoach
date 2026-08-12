@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeIndicators } from "@/lib/indicators";
 import { buildVerdicts, explainDayMove } from "@/lib/signals";
-import { getChart } from "@/lib/yahoo";
+import { getChart } from "@/lib/marketdata";
 import type { Analysis } from "@/lib/types";
 
 export const runtime = "nodejs";

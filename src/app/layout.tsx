@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             StockCoach signals are computed from past price data only. Past performance never
             guarantees future results, and no tool can reliably predict stock prices. Do your own
             research and consider talking to a licensed financial advisor before investing real
-            money. Market data via Yahoo Finance (may be delayed). Your portfolio is stored only in
+            money. Market data via Yahoo Finance / CBOE (delayed up to ~15 minutes). Your portfolio is stored only in
             your browser — it never leaves your device.
           </div>
         </footer>

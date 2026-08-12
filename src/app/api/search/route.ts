@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchSymbols } from "@/lib/yahoo";
+import { searchSymbols } from "@/lib/marketdata";
 
 export const runtime = "nodejs";
 

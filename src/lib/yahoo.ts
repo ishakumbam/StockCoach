@@ -65,6 +65,9 @@ async function getSession(force = false): Promise<YahooSession> {
 // ---------------------------------------------------------------------------
 
 const cache = new Map<string, { expires: number; data: unknown }>();
+// Last-known-good values, kept without expiry: when Yahoo rate-limits us we
+// serve slightly stale data instead of nothing.
+const lastGood = new Map<string, unknown>();
 
 function cacheGet<T>(key: string): T | null {
   const hit = cache.get(key);
@@ -78,7 +81,13 @@ function cacheGet<T>(key: string): T | null {
 
 function cacheSet(key: string, data: unknown, ttlMs: number) {
   if (cache.size > 500) cache.clear(); // crude but sufficient bound
+  if (lastGood.size > 500) lastGood.clear();
   cache.set(key, { expires: Date.now() + ttlMs, data });
+  lastGood.set(key, data);
+}
+
+function staleGet<T>(key: string): T | null {
+  return (lastGood.get(key) as T | undefined) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,9 +190,17 @@ export async function getChart(
     symbol
   )}?range=${range}&interval=${interval}&includePrePost=false`;
   const res = await yahooFetch(url);
-  if (!res.ok) throw new Error(`Yahoo chart request failed (${res.status})`);
+  if (!res.ok) {
+    const stale = staleGet<ChartData>(key);
+    if (stale) return stale;
+    throw new Error(`Yahoo chart request failed (${res.status})`);
+  }
   const data = (await res.json()) as YahooChartResponse;
-  if (data.chart.error) throw new Error(data.chart.error.description);
+  if (data.chart.error) {
+    const stale = staleGet<ChartData>(key);
+    if (stale) return stale;
+    throw new Error(data.chart.error.description);
+  }
 
   const first = data.chart.result?.[0];
   if (!first) throw new Error(`No data for symbol ${symbol}`);
@@ -300,6 +317,14 @@ export async function getQuotes(symbols: string[]): Promise<Record<string, Quote
     })
   );
 
+  // Still nothing (rate limited)? Serve last-known-good quotes.
+  for (const s of missing) {
+    if (!quotes[s]) {
+      const stale = staleGet<Quote>(`quote:${s}`);
+      if (stale) quotes[s] = stale;
+    }
+  }
+
   return quotes;
 }
 
@@ -327,7 +352,11 @@ export async function searchSymbols(query: string): Promise<SearchResult[]> {
     query
   )}&quotesCount=8&newsCount=0&listsCount=0`;
   const res = await yahooFetch(url);
-  if (!res.ok) throw new Error(`Yahoo search failed (${res.status})`);
+  if (!res.ok) {
+    const stale = staleGet<SearchResult[]>(key);
+    if (stale) return stale;
+    throw new Error(`Yahoo search failed (${res.status})`);
+  }
   const data = (await res.json()) as YahooSearchResponse;
   const results = (data.quotes ?? [])
     .filter((q) => q.symbol && (q.quoteType === "EQUITY" || q.quoteType === "ETF"))
