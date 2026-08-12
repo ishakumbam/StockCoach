@@ -11,13 +11,22 @@ import { KNOWN_SYMBOLS } from "./symbols";
 
 const BASE = "https://cdn.cboe.com/api/global/delayed_quotes";
 
-async function cboeJson<T>(path: string): Promise<T> {
+// Small TTL cache — the historical endpoint returns ~20 years of rows, so we
+// avoid refetching it for every quote/spark/analysis call.
+const cboeCache = new Map<string, { expires: number; data: unknown }>();
+
+async function cboeJson<T>(path: string, ttlMs = 60 * 1000): Promise<T> {
+  const hit = cboeCache.get(path);
+  if (hit && Date.now() < hit.expires) return hit.data as T;
   const res = await fetch(`${BASE}/${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`CBOE request failed (${res.status})`);
-  return (await res.json()) as T;
+  const data = (await res.json()) as T;
+  if (cboeCache.size > 300) cboeCache.clear();
+  cboeCache.set(path, { expires: Date.now() + ttlMs, data });
+  return data;
 }
 
 /** Minutes to add to a naive New-York-local timestamp to get UTC. */
@@ -101,7 +110,8 @@ interface CboeHistoricalResponse {
 /** Daily candles, most recent last. `days` limits how far back we go. */
 export async function getCboeDaily(symbol: string, days: number): Promise<Candle[]> {
   const { data } = await cboeJson<CboeHistoricalResponse>(
-    `charts/historical/${encodeURIComponent(symbol.toUpperCase())}.json`
+    `charts/historical/${encodeURIComponent(symbol.toUpperCase())}.json`,
+    5 * 60 * 1000
   );
   return data.slice(-days).map((row) => ({
     // Noon ET keeps the candle inside the right local calendar day.

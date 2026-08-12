@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { NavLinks } from "@/components/NavLinks";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -16,41 +17,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen`}>
-        <header className="sticky top-0 z-40 border-b border-line bg-background/85 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-line/70 bg-background/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-            <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-accent-soft">
-                📈
+            <Link href="/" className="group flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-soft text-sm font-bold text-white shadow-lg shadow-accent/25">
+                S
               </span>
-              StockCoach
+              <span className="text-lg font-semibold tracking-tight">
+                StockCoach
+                <span className="ml-2 hidden rounded-full border border-line px-2 py-0.5 text-[10px] font-normal uppercase tracking-wider text-muted sm:inline">
+                  Educational
+                </span>
+              </span>
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
-              <Link
-                href="/"
-                className="rounded-lg px-3 py-1.5 text-muted transition hover:bg-surface-2 hover:text-foreground"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/learn"
-                className="rounded-lg px-3 py-1.5 text-muted transition hover:bg-surface-2 hover:text-foreground"
-              >
-                Learn
-              </Link>
-            </nav>
+            <NavLinks />
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
 
-        <footer className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6">
-          <div className="rounded-xl border border-line bg-surface p-4 text-xs leading-relaxed text-muted">
+        <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4 sm:px-6">
+          <div className="rounded-xl border border-line bg-surface/60 p-4 text-xs leading-relaxed text-muted">
             <strong className="text-foreground">Educational tool — not financial advice.</strong>{" "}
             StockCoach signals are computed from past price data only. Past performance never
             guarantees future results, and no tool can reliably predict stock prices. Do your own
             research and consider talking to a licensed financial advisor before investing real
-            money. Market data via Yahoo Finance / CBOE (delayed up to ~15 minutes). Your portfolio is stored only in
-            your browser — it never leaves your device.
+            money. Market data via Yahoo Finance / CBOE (delayed up to ~15 minutes). Your portfolio
+            is stored only in your browser — it never leaves your device.
           </div>
         </footer>
       </body>

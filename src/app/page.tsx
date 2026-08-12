@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImportCsv } from "@/components/ImportCsv";
 import { SearchBox } from "@/components/SearchBox";
+import { Sparkline } from "@/components/Sparkline";
 import { Term } from "@/components/Term";
 import { changeColor, money, moneyCompact, pct, num } from "@/lib/format";
 import type { Position, Quote } from "@/lib/types";
@@ -16,9 +17,12 @@ const STARTER_WATCHLIST: Omit<Position, "addedAt">[] = [
   { symbol: "NVDA", name: "NVIDIA Corporation", shares: 0, costBasis: null },
 ];
 
+const ALLOC_COLORS = ["#6366f1", "#34d399", "#f59e0b", "#38bdf8", "#f472b6", "#a78bfa", "#fb923c", "#4ade80"];
+
 export default function Dashboard() {
   const { positions, hydrated, addPosition, removePosition, importPositions } = usePortfolio();
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
+  const [sparks, setSparks] = useState<Record<string, number[]>>({});
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [dataIssue, setDataIssue] = useState(false);
 
@@ -44,6 +48,23 @@ export default function Dashboard() {
     const t = setInterval(refresh, 60_000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!symbols) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/spark?symbols=${symbols}`);
+        const data = (await res.json()) as { sparks: Record<string, number[]> };
+        if (!cancelled) setSparks((prev) => ({ ...prev, ...data.sparks }));
+      } catch {
+        // sparklines are decoration — fail silently
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbols]);
 
   const owned = positions.filter((p) => p.shares > 0);
   const watching = positions.filter((p) => p.shares === 0);
@@ -71,150 +92,199 @@ export default function Dashboard() {
     };
   }, [owned, quotes]);
 
-  const concentration = useMemo(() => {
-    if (totals.value <= 0) return null;
-    let worst: { symbol: string; pct: number } | null = null;
-    for (const p of owned) {
-      const q = quotes[p.symbol];
-      if (!q) continue;
-      const share = ((q.price * p.shares) / totals.value) * 100;
-      if (share > 20 && (!worst || share > worst.pct)) worst = { symbol: p.symbol, pct: share };
-    }
-    return worst;
+  const allocation = useMemo(() => {
+    if (totals.value <= 0) return [];
+    return owned
+      .map((p) => {
+        const q = quotes[p.symbol];
+        return { symbol: p.symbol, weight: q ? ((q.price * p.shares) / totals.value) * 100 : 0 };
+      })
+      .filter((a) => a.weight > 0)
+      .sort((a, b) => b.weight - a.weight);
   }, [owned, quotes, totals.value]);
+
+  const concentration = allocation.find((a) => a.weight > 20) ?? null;
 
   if (!hydrated) return null;
 
+  if (positions.length === 0) {
+    return (
+      <section className="mx-auto max-w-2xl rounded-2xl border border-line bg-surface p-8 text-center fade-up sm:p-12">
+        <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-soft text-2xl font-bold text-white shadow-xl shadow-accent/25">
+          S
+        </span>
+        <h1 className="text-3xl font-semibold tracking-tight">Welcome to StockCoach</h1>
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-muted">
+          Track the stocks you own (or wish you owned), get plain-English buy/hold/sell signals for
+          day trading, swing trading, and long-term investing — and learn as you go. New to
+          stocks?{" "}
+          <Link href="/learn" className="text-accent-soft underline underline-offset-2">
+            Start with the 5-minute basics
+          </Link>
+          .
+        </p>
+        <div className="mt-8 text-left">
+          <SearchBox onAdd={addPosition} />
+        </div>
+        <button
+          onClick={() => STARTER_WATCHLIST.forEach((p) => addPosition(p))}
+          className="mt-5 text-sm text-accent-soft underline underline-offset-2 hover:text-foreground"
+        >
+          …or start with a sample watchlist (Apple, Microsoft, an S&amp;P 500 fund, NVIDIA)
+        </button>
+        <div className="mt-6 border-t border-line pt-6 text-left">
+          <ImportCsv onImport={importPositions} />
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <div className="space-y-8">
-      {positions.length === 0 ? (
-        <section className="rounded-2xl border border-line bg-surface p-8 text-center fade-up">
-          <h1 className="text-2xl font-semibold">Welcome to StockCoach 👋</h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted">
-            Track the stocks you own (or wish you owned), get plain-English buy/hold/sell signals
-            for day trading, swing trading, and long-term investing — and learn what it all means
-            along the way. New to stocks?{" "}
-            <Link href="/learn" className="text-accent-soft underline underline-offset-2">
-              Start with the 5-minute basics
-            </Link>
-            .
+    <div className="space-y-10">
+      <div className="flex flex-wrap items-end justify-between gap-3 fade-up">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
+          <p className="mt-1 text-xs text-muted">
+            {owned.length} holding{owned.length === 1 ? "" : "s"} · {watching.length} on watchlist ·
+            prices refresh every minute
           </p>
-          <div className="mx-auto mt-6 max-w-xl text-left">
-            <SearchBox onAdd={addPosition} />
-          </div>
-          <div className="mt-4 flex flex-col items-center gap-3">
-            <button
-              onClick={() => STARTER_WATCHLIST.forEach((p) => addPosition(p))}
-              className="text-sm text-accent-soft underline underline-offset-2 hover:text-foreground"
-            >
-              …or start with a sample watchlist (Apple, Microsoft, an S&amp;P 500 fund, NVIDIA)
-            </button>
-            <div className="w-full max-w-xl text-left">
-              <ImportCsv onImport={importPositions} />
-            </div>
-          </div>
-        </section>
-      ) : (
-        <>
-          {dataIssue && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
-              📡 Live prices are temporarily unavailable (the free market-data service occasionally
-              rate-limits). The app retries automatically every minute — your portfolio is safe and
-              nothing is lost.
-            </div>
-          )}
-          <section className="grid gap-4 sm:grid-cols-3 fade-up">
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <p className="text-xs text-muted">
-                <Term id="portfolio">Portfolio</Term> value
-              </p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight">
-                {owned.length ? moneyCompact(totals.value) : "—"}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                {owned.length
-                  ? `${owned.length} holding${owned.length === 1 ? "" : "s"} · ${watching.length} watching`
-                  : "You're only watching stocks right now — no money at risk."}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <p className="text-xs text-muted">
-                Today&apos;s <Term id="day-change">change</Term>
-              </p>
-              <p className={`mt-1 text-3xl font-semibold tracking-tight ${changeColor(totals.dayChange)}`}>
-                {owned.length ? `${totals.dayChange >= 0 ? "+" : ""}${money(totals.dayChange)}` : "—"}
-              </p>
-              <p className={`mt-1 text-xs ${changeColor(totals.dayChange)}`}>
-                {owned.length ? pct(totals.dayChangePct) : ""}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <p className="text-xs text-muted">
-                Total gain/loss vs <Term id="cost-basis">what you paid</Term>
-              </p>
-              <p className={`mt-1 text-3xl font-semibold tracking-tight ${changeColor(totals.gain)}`}>
-                {totals.gain != null ? `${totals.gain >= 0 ? "+" : ""}${money(totals.gain)}` : "—"}
-              </p>
-              <p className={`mt-1 text-xs ${changeColor(totals.gain)}`}>
-                {totals.gainPct != null
-                  ? pct(totals.gainPct)
-                  : "Add the price you paid to see your profit."}
-              </p>
-            </div>
-          </section>
+        </div>
+        <button
+          onClick={refresh}
+          className="rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition hover:border-accent hover:text-foreground"
+        >
+          {loadingQuotes ? "Refreshing…" : "↻ Refresh"}
+        </button>
+      </div>
 
-          {concentration && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
-              ⚠️ <strong>{concentration.symbol}</strong> is {concentration.pct.toFixed(0)}% of your
-              portfolio. That&apos;s a lot of eggs in one basket —{" "}
-              <Term id="diversification">diversification</Term> protects you when a single company
-              stumbles.
-            </div>
-          )}
-
-          {owned.length > 0 && (
-            <section>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Your holdings</h2>
-                <button
-                  onClick={refresh}
-                  className="text-xs text-muted transition hover:text-foreground"
-                >
-                  {loadingQuotes ? "Refreshing…" : "↻ Refresh prices"}
-                </button>
-              </div>
-              <PositionTable
-                positions={owned}
-                quotes={quotes}
-                onRemove={removePosition}
-                owned
-              />
-            </section>
-          )}
-
-          {watching.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg font-semibold">
-                <Term id="watch-list">Watchlist</Term>
-              </h2>
-              <PositionTable
-                positions={watching}
-                quotes={quotes}
-                onRemove={removePosition}
-                owned={false}
-              />
-            </section>
-          )}
-
-          <section className="rounded-2xl border border-line bg-surface p-5">
-            <h2 className="mb-3 text-lg font-semibold">Add a stock</h2>
-            <SearchBox onAdd={addPosition} />
-            <div className="mt-4 border-t border-line pt-4">
-              <ImportCsv onImport={importPositions} />
-            </div>
-          </section>
-        </>
+      {dataIssue && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
+          📡 Live prices are temporarily unavailable. The app retries automatically every minute —
+          your portfolio is safe and nothing is lost.
+        </div>
       )}
+
+      <section className="grid gap-4 sm:grid-cols-3 fade-up">
+        <StatCard
+          label={<><Term id="portfolio">Portfolio</Term> value</>}
+          value={owned.length ? moneyCompact(totals.value) : "—"}
+          sub={owned.length ? undefined : "Watching only — no money at risk."}
+        />
+        <StatCard
+          label={<>Today&apos;s <Term id="day-change">change</Term></>}
+          value={owned.length ? `${totals.dayChange >= 0 ? "+" : ""}${money(totals.dayChange)}` : "—"}
+          valueClass={changeColor(totals.dayChange)}
+          sub={owned.length ? pct(totals.dayChangePct) : undefined}
+          subClass={changeColor(totals.dayChange)}
+        />
+        <StatCard
+          label={<>All-time gain vs <Term id="cost-basis">cost</Term></>}
+          value={totals.gain != null ? `${totals.gain >= 0 ? "+" : ""}${money(totals.gain)}` : "—"}
+          valueClass={changeColor(totals.gain)}
+          sub={totals.gainPct != null ? pct(totals.gainPct) : "Add the price you paid to see profit."}
+          subClass={totals.gainPct != null ? changeColor(totals.gain) : undefined}
+        />
+      </section>
+
+      {allocation.length > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-5 fade-up">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Allocation</h2>
+            <span className="text-xs text-muted">
+              <Term id="diversification">Why does this matter?</Term>
+            </span>
+          </div>
+          <div className="flex h-3 w-full overflow-hidden rounded-full border border-line/50">
+            {allocation.map((a, i) => (
+              <div
+                key={a.symbol}
+                title={`${a.symbol} ${a.weight.toFixed(1)}%`}
+                style={{ width: `${a.weight}%`, background: ALLOC_COLORS[i % ALLOC_COLORS.length] }}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {allocation.map((a, i) => (
+              <span key={a.symbol} className="flex items-center gap-1.5 text-xs text-muted">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: ALLOC_COLORS[i % ALLOC_COLORS.length] }}
+                />
+                <span className="font-medium text-foreground">{a.symbol}</span>
+                <span className="tnum">{a.weight.toFixed(1)}%</span>
+              </span>
+            ))}
+          </div>
+          {concentration && (
+            <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100">
+              ⚠️ <strong>{concentration.symbol}</strong> is {concentration.weight.toFixed(0)}% of
+              your portfolio — a lot of eggs in one basket. Diversifying protects you when a single
+              company stumbles.
+            </p>
+          )}
+        </section>
+      )}
+
+      {owned.length > 0 && (
+        <section className="fade-up">
+          <h2 className="mb-3 text-lg font-semibold">Holdings</h2>
+          <PositionTable
+            positions={owned}
+            quotes={quotes}
+            sparks={sparks}
+            onRemove={removePosition}
+            owned
+          />
+        </section>
+      )}
+
+      {watching.length > 0 && (
+        <section className="fade-up">
+          <h2 className="mb-3 text-lg font-semibold">
+            <Term id="watch-list">Watchlist</Term>
+          </h2>
+          <PositionTable
+            positions={watching}
+            quotes={quotes}
+            sparks={sparks}
+            onRemove={removePosition}
+            owned={false}
+          />
+        </section>
+      )}
+
+      <section className="rounded-2xl border border-line bg-surface p-6 fade-up">
+        <h2 className="text-lg font-semibold">Add a stock</h2>
+        <p className="mb-4 mt-1 text-xs text-muted">
+          Search by company name or ticker — add it as a holding or just watch it.
+        </p>
+        <SearchBox onAdd={addPosition} />
+        <div className="mt-5 border-t border-line pt-5">
+          <ImportCsv onImport={importPositions} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+  valueClass = "",
+  subClass = "text-muted",
+}: {
+  label: React.ReactNode;
+  value: string;
+  sub?: React.ReactNode;
+  valueClass?: string;
+  subClass?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-5">
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`tnum mt-1.5 text-3xl font-semibold tracking-tight ${valueClass}`}>{value}</p>
+      {sub && <p className={`tnum mt-1 text-xs ${subClass}`}>{sub}</p>}
     </div>
   );
 }
@@ -222,25 +292,28 @@ export default function Dashboard() {
 function PositionTable({
   positions,
   quotes,
+  sparks,
   onRemove,
   owned,
 }: {
   positions: Position[];
   quotes: Record<string, Quote>;
+  sparks: Record<string, number[]>;
   onRemove: (symbol: string) => void;
   owned: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[640px] text-sm">
         <thead className="text-left text-xs text-muted">
           <tr className="border-b border-line">
             <th className="px-4 py-3 font-medium">Stock</th>
-            <th className="px-4 py-3 font-medium">Price</th>
-            <th className="px-4 py-3 font-medium">Today</th>
-            {owned && <th className="px-4 py-3 font-medium">Shares</th>}
-            {owned && <th className="px-4 py-3 font-medium">Value</th>}
-            {owned && <th className="px-4 py-3 font-medium">Gain/loss</th>}
+            <th className="px-4 py-3 font-medium">30-day trend</th>
+            <th className="px-4 py-3 text-right font-medium">Price</th>
+            <th className="px-4 py-3 text-right font-medium">Today</th>
+            {owned && <th className="px-4 py-3 text-right font-medium">Shares</th>}
+            {owned && <th className="px-4 py-3 text-right font-medium">Value</th>}
+            {owned && <th className="px-4 py-3 text-right font-medium">Gain/loss</th>}
             <th className="px-4 py-3" />
           </tr>
         </thead>
@@ -248,46 +321,64 @@ function PositionTable({
           {positions.map((p) => {
             const q = quotes[p.symbol];
             const value = q ? q.price * p.shares : null;
-            const gain =
-              q && p.costBasis != null ? (q.price - p.costBasis) * p.shares : null;
-            const gainPct =
-              q && p.costBasis ? ((q.price - p.costBasis) / p.costBasis) * 100 : null;
+            const gain = q && p.costBasis != null ? (q.price - p.costBasis) * p.shares : null;
+            const gainPct = q && p.costBasis ? ((q.price - p.costBasis) / p.costBasis) * 100 : null;
             return (
-              <tr key={p.symbol} className="border-b border-line last:border-0 hover:bg-surface-2/50">
-                <td className="px-4 py-3">
-                  <Link href={`/stock/${p.symbol}`} className="group block">
-                    <span className="font-semibold text-accent-soft group-hover:underline">
+              <tr
+                key={p.symbol}
+                className="group border-b border-line/70 transition last:border-0 hover:bg-surface-2/50"
+              >
+                <td className="px-4 py-3.5">
+                  <Link href={`/stock/${p.symbol}`} className="block">
+                    <span className="font-semibold text-foreground group-hover:text-accent-soft">
                       {p.symbol}
                     </span>
-                    <span className="block max-w-[220px] truncate text-xs text-muted">
+                    <span className="block max-w-[200px] truncate text-xs text-muted">
                       {q?.name ?? p.name}
                     </span>
                   </Link>
                 </td>
-                <td className="px-4 py-3 font-medium">{q ? money(q.price, q.currency) : "…"}</td>
-                <td className={`px-4 py-3 ${changeColor(q?.dayChangePct)}`}>
+                <td className="px-4 py-3.5">
+                  <Link href={`/stock/${p.symbol}`} className="block">
+                    <Sparkline values={sparks[p.symbol]} />
+                  </Link>
+                </td>
+                <td className="tnum px-4 py-3.5 text-right font-medium">
+                  {q ? money(q.price, q.currency) : "…"}
+                </td>
+                <td className={`tnum px-4 py-3.5 text-right ${changeColor(q?.dayChangePct)}`}>
                   {q ? pct(q.dayChangePct) : "…"}
                 </td>
-                {owned && <td className="px-4 py-3">{num(p.shares, 4)}</td>}
-                {owned && <td className="px-4 py-3">{value != null ? money(value) : "…"}</td>}
+                {owned && <td className="tnum px-4 py-3.5 text-right">{num(p.shares, 4)}</td>}
                 {owned && (
-                  <td className={`px-4 py-3 ${changeColor(gain)}`}>
-                    {gain != null
-                      ? `${gain >= 0 ? "+" : ""}${money(gain)} (${pct(gainPct)})`
-                      : "—"}
+                  <td className="tnum px-4 py-3.5 text-right">
+                    {value != null ? money(value) : "…"}
                   </td>
                 )}
-                <td className="px-4 py-3 text-right">
+                {owned && (
+                  <td className={`tnum px-4 py-3.5 text-right ${changeColor(gain)}`}>
+                    {gain != null ? (
+                      <>
+                        {gain >= 0 ? "+" : ""}
+                        {money(gain)}
+                        <span className="block text-xs opacity-75">{pct(gainPct)}</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                )}
+                <td className="px-4 py-3.5 text-right whitespace-nowrap">
                   <Link
                     href={`/stock/${p.symbol}`}
-                    className="mr-2 rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition hover:border-accent hover:text-foreground"
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition hover:border-accent hover:text-foreground"
                   >
                     Signals →
                   </Link>
                   <button
                     onClick={() => onRemove(p.symbol)}
-                    title="Remove"
-                    className="rounded-lg px-2 py-1.5 text-xs text-muted transition hover:text-rose-300"
+                    title={`Remove ${p.symbol}`}
+                    className="ml-1 rounded-lg px-2 py-1.5 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-rose-300"
                   >
                     ✕
                   </button>
