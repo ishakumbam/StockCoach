@@ -47,14 +47,17 @@ function nyDateString(d = new Date()): string {
 let cached: DailyPicks | null = null;
 let building: Promise<DailyPicks> | null = null;
 
-async function scanSymbol(symbol: string): Promise<{ symbol: string; verdicts: StyleVerdict[]; name: string; price: number; dayChangePct: number } | null> {
+async function scanSymbol(
+  symbol: string,
+  attempt = 0
+): Promise<{ symbol: string; verdicts: StyleVerdict[]; name: string; price: number; dayChangePct: number } | null> {
   try {
-    const [dailyData, intradayData] = await Promise.all([
-      getChart(symbol, "1y", "1d"),
-      getChart(symbol, "5d", "15m").catch(() => null),
-    ]);
+    // Daily data only: half the requests of a full analysis. Day-style
+    // verdicts fall back to the day-change signal, which is fine for a scan —
+    // the stock detail page still runs the full intraday analysis.
+    const dailyData = await getChart(symbol, "1y", "1d");
     const indicators = computeIndicators(dailyData.candles);
-    const verdicts = buildVerdicts(indicators, dailyData.quote, intradayData?.candles ?? []);
+    const verdicts = buildVerdicts(indicators, dailyData.quote, []);
     return {
       symbol,
       verdicts,
@@ -63,6 +66,10 @@ async function scanSymbol(symbol: string): Promise<{ symbol: string; verdicts: S
       dayChangePct: dailyData.quote.dayChangePct,
     };
   } catch {
+    if (attempt === 0) {
+      await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
+      return scanSymbol(symbol, 1);
+    }
     return null;
   }
 }
@@ -103,7 +110,7 @@ function toPick(
 }
 
 async function buildPicks(): Promise<DailyPicks> {
-  const rows = await mapLimit(SCAN_UNIVERSE, 6, scanSymbol);
+  const rows = await mapLimit(SCAN_UNIVERSE, 4, (s) => scanSymbol(s));
   const ok = rows.filter((r): r is NonNullable<typeof r> => r != null);
 
   const byStyle = {} as DailyPicks["byStyle"];
