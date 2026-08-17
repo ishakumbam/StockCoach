@@ -136,6 +136,48 @@ export default function AlertsPage() {
         </p>
       </section>
 
+      <section className="rounded-2xl border border-accent/30 bg-accent/[0.07] p-5">
+        <h2 className="text-sm font-semibold">📱 Get alerts on your phone</h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold text-foreground"> iPhone / iPad</p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-muted">
+              <li>
+                Open <span className="text-foreground">stockcoach.vercel.app</span> in{" "}
+                <strong>Safari</strong> on your phone
+              </li>
+              <li>
+                Tap the Share button <span className="text-foreground">⎋</span> →{" "}
+                <strong>Add to Home Screen</strong>
+              </li>
+              <li>Open StockCoach from the new home-screen icon and sign in</li>
+              <li>
+                Come back to this page and tap <strong>Enable on this device</strong>
+              </li>
+            </ol>
+            <p className="mt-1.5 text-[11px] text-muted/80">
+              (Apple only allows web notifications for apps on the home screen — that&apos;s why
+              the extra step.)
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-foreground">🤖 Android</p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-muted">
+              <li>
+                Open <span className="text-foreground">stockcoach.vercel.app</span> in Chrome and
+                sign in
+              </li>
+              <li>
+                Tap <strong>Enable on this device</strong> above and allow notifications
+              </li>
+              <li>
+                Optional: menu ⋮ → <strong>Add to Home screen</strong> for a real app icon
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="text-sm font-semibold">Automatic alerts</h2>
         <div className="mt-3 space-y-3">

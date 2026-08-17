@@ -14,6 +14,19 @@ export const metadata: Metadata = {
   title: "StockCoach — learn stocks, track your portfolio",
   description:
     "A beginner-friendly portfolio tracker that explains every signal in plain English. Educational only — not financial advice.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "StockCoach",
+  },
+};
+
+export const viewport = {
+  themeColor: "#0b0e14",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
