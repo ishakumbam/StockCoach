@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AuthMenu } from "@/components/AuthMenu";
 import { Logo } from "@/components/Logo";
 import { NavLinks } from "@/components/NavLinks";
+import { NotificationBell } from "@/components/NotificationBell";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <div className="flex items-center gap-3">
               <NavLinks />
+              <NotificationBell />
               <AuthMenu />
             </div>
           </div>

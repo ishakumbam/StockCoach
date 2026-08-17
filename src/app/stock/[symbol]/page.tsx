@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
+import { SetAlert } from "@/components/SetAlert";
 import { StyleTabs } from "@/components/StyleTabs";
 import { Term } from "@/components/Term";
 import { VerdictBadge } from "@/components/VerdictBadge";
@@ -130,6 +131,7 @@ export default function StockPage({ params }: { params: Promise<{ symbol: string
             </p>
           </div>
           <div className="flex gap-2">
+            <SetAlert symbol={quote.symbol} price={quote.price} />
             {!inPortfolio && (
               <button
                 onClick={() =>

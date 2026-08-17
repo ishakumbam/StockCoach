@@ -1,0 +1,17 @@
+# Pings the alert checker every 10 minutes during (extended) US market hours.
+# The endpoint self-throttles, so overlapping or off-hours pings are harmless.
+name: Alert sweep
+
+on:
+  schedule:
+    # Every 10 min, 13:00–21:00 UTC, Mon–Fri (covers 9:30–16:00 ET year-round)
+    - cron: "*/10 13-21 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger alert sweep
+        run: |
+          curl -sS -m 110 "https://stockcoach.vercel.app/api/cron/check-alerts" | head -c 500
