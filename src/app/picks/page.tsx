@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StyleTabs } from "@/components/StyleTabs";
-import { changeColor, money, pct } from "@/lib/format";
+import { changeColor, money, pct, timeAgo } from "@/lib/format";
 import type { TradingStyle } from "@/lib/types";
 import type { DailyPicks, Pick } from "@/lib/picks";
+import type { BuzzTicker, SocialBuzz } from "@/lib/social";
 
 export default function PicksPage() {
   const [picks, setPicks] = useState<DailyPicks | null>(null);
@@ -88,10 +89,168 @@ export default function PicksPage() {
         />
       </div>
 
+      <TraderBuzz />
+
       <p className="text-xs text-muted">
         Picks refresh automatically each market day. Not financial advice — always do your own
         research before trading real money.
       </p>
+    </div>
+  );
+}
+
+function TraderBuzz() {
+  const [buzz, setBuzz] = useState<SocialBuzz | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/buzz");
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as SocialBuzz;
+        if (!cancelled) {
+          if (data.tickers.length === 0) setFailed(true);
+          else setBuzz(data);
+        }
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (failed) return null;
+
+  return (
+    <section className="border-t border-line pt-8">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold">🔥 What traders are saying right now</h2>
+        {buzz && (
+          <span className="text-xs text-muted">
+            Live from {buzz.sources.join(" + ")} · refreshes every 15 min
+          </span>
+        )}
+      </div>
+      <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">
+        The most-talked-about stocks across trading communities, with the loudest voices (by
+        follower count) and their own words on why they&apos;re buying or selling. Popular
+        opinions move markets — but they are opinions, often wrong, and sometimes hype. Compare
+        them against the chart signals before believing anyone.
+      </p>
+
+      {!buzz ? (
+        <div className="mt-4 flex items-center gap-2 text-xs text-muted">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border border-line border-t-accent" />
+          Listening in on the trading floor…
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {buzz.tickers.map((t) => (
+            <BuzzCard key={t.symbol} ticker={t} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BuzzCard({ ticker: t }: { ticker: BuzzTicker }) {
+  const total = t.bullish + t.bearish;
+  const bullPct = total > 0 ? Math.round((t.bullish / total) * 100) : null;
+  const mentionsUp =
+    t.redditMentions != null && t.redditMentions24hAgo != null && t.redditMentions24hAgo > 0
+      ? Math.round((t.redditMentions / t.redditMentions24hAgo - 1) * 100)
+      : null;
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={`/stock/${t.symbol}`} className="group">
+          <span className="font-semibold text-foreground group-hover:text-accent-soft">
+            {t.symbol}
+          </span>
+          <span className="ml-2 max-w-[180px] truncate text-xs text-muted">{t.name}</span>
+        </Link>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {t.redditRank != null && (
+            <span className="rounded-full bg-orange-500/15 px-2 py-0.5 font-medium text-orange-300">
+              #{t.redditRank} on Reddit
+              {t.redditMentions != null && ` · ${t.redditMentions} mentions`}
+              {mentionsUp != null && mentionsUp > 0 && ` (↑${mentionsUp}%)`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {bullPct != null && (
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between text-[11px] text-muted">
+            <span className="text-emerald-300">
+              {bullPct}% bullish ({t.bullish})
+            </span>
+            <span className="text-rose-300">
+              {100 - bullPct}% bearish ({t.bearish})
+            </span>
+          </div>
+          <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div className="bg-emerald-400/80" style={{ width: `${bullPct}%` }} />
+            <div className="bg-rose-400/70" style={{ width: `${100 - bullPct}%` }} />
+          </div>
+          <p className="mt-1 text-[10px] text-muted">
+            Sentiment among recent tagged Stocktwits posts
+          </p>
+        </div>
+      )}
+
+      {t.voices.length > 0 && (
+        <div className="mt-3 space-y-2.5">
+          {t.voices.map((v, i) => (
+            <a
+              key={i}
+              href={v.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-xl border border-line bg-surface-2/50 p-3 transition hover:border-accent/50"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-medium">
+                  @{v.username}
+                  <span className="ml-1.5 font-normal text-muted">
+                    {Intl.NumberFormat("en-US", { notation: "compact" }).format(v.followers)}{" "}
+                    followers · {v.platform}
+                  </span>
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    v.sentiment === "Bullish"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-rose-500/15 text-rose-300"
+                  }`}
+                >
+                  {v.sentiment === "Bullish" ? "▲ Bullish" : "▼ Bearish"}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">“{v.body}”</p>
+              {v.createdAt && (
+                <p className="mt-1 text-[10px] text-muted/70">
+                  {timeAgo(new Date(v.createdAt).getTime() / 1000)} ↗
+                </p>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
+
+      <Link
+        href={`/stock/${t.symbol}`}
+        className="mt-3 inline-block text-xs text-accent-soft underline underline-offset-2"
+      >
+        Compare with chart signals →
+      </Link>
     </div>
   );
 }
